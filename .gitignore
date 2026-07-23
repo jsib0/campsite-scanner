@@ -1,5 +1,13 @@
 logs/
 __pycache__/
+.idea/
+.venv/
+venv/
+.env
+.env.*
 *.env
-./venv
+!.env.example
 *.log
+build/
+dist/
+*.egg-info/

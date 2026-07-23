@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "camp-scanner"
+version = "0.1.0"
+description = "Watch Recreation.gov for Yosemite campsite availability and send alerts"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Jon Sibala" }]
+keywords = ["yosemite", "camping", "recreation.gov", "ntfy", "twilio"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+tls = ["certifi>=2024.0.0"]
+
+[project.scripts]
+camp-scanner = "camp_scanner.cli:main"
+
+[project.urls]
+Repository = "https://github.com/jsib0/camp_scanner"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/camp_scanner"]

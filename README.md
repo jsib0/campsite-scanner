@@ -1,130 +1,132 @@
 # Yosemite Campground Scanner
-> This project uses an undocumented Recreation.gov website endpoint. The endpoint
-> may change or throttle requests without notice. An alert does not reserve a site;
-> complete the reservation on Recreation.gov.
 
-
-This command-line scanner watches Recreation.gov for campsites that are available
-for every night of a requested Yosemite stay. It currently checks:
+This command-line application monitors Recreation.gov for Yosemite campsite
+availability. It currently checks:
 
 - Upper Pines
 - Lower Pines
 - North Pines
 - Camp 4
 
-It prints results in the terminal and can send alerts through either
-[ntfy](https://ntfy.sh/) or Twilio SMS. On macOS, it also shows local Notification
-Center alerts by default.
+It can print openings in the terminal, show macOS notifications, and send remote
+alerts through [ntfy](https://ntfy.sh/) or Twilio SMS.
 
+> Recreation.gov's availability endpoint is not a documented public API. It may
+> change or throttle requests without notice. An alert does not reserve a site;
+> complete the reservation on Recreation.gov.
 
 ## Requirements
 
 - Python 3.10 or newer
 - Internet access
-- For remote alerts, either an ntfy subscription or a Twilio account
+- An ntfy subscription or Twilio account for remote alerts
 
-The scanner otherwise uses only Python's standard library. If `certifi` is
-installed, it will use that package's CA certificate bundle.
+The scanner uses Python's standard library. If `certifi` is installed, its CA
+certificate bundle is used automatically.
+
+## Install
+
+For a simple isolated installation, use
+[pipx](https://pipx.pypa.io/):
+
+```bash
+pipx install git+https://github.com/jsib0/camp_scanner.git
+```
+
+This installs the `camp-scanner` command.
+
+For development:
+
+```bash
+git clone https://github.com/jsib0/camp_scanner.git
+cd camp_scanner
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+```
+
+You can then use either entry point:
+
+```bash
+camp-scanner --help
+python -m camp_scanner --help
+```
 
 ## Quick start with ntfy
 
 1. Install the ntfy mobile app or open [ntfy.sh](https://ntfy.sh/).
 2. Choose a hard-to-guess topic name and subscribe to it.
-3. In a terminal, enter the project directory and export that same topic:
+3. Export the same topic:
 
    ```bash
-   cd /path/to/camp_scanner
    export NTFY_TOPIC="your-private-topic-name"
    ```
 
 4. Send a test notification:
 
    ```bash
-   python3 yosemite_scanner_sms.py --messenger ntfy --test-message
+   camp-scanner --messenger ntfy --test-message
    ```
 
-5. Start scanning every 25 seconds:
+5. Start scanning:
 
    ```bash
-   python3 yosemite_scanner_sms.py --messenger ntfy --interval 25
+   camp-scanner --messenger ntfy
    ```
 
 Keep the terminal open while the scanner runs. Press `Ctrl+C` to stop it.
 
-The interval defaults to 25 seconds, so `--interval 25` can be omitted.
+## Environment settings
 
-Activity is also written to `logs/yosemite_scanner.log`. The log rotates at
-midnight, and rotated files older than the seven retained daily backups are
-deleted automatically.
+The application reads secrets and settings from environment variables. Never
+commit actual credentials, phone numbers, tokens, or private ntfy topics.
 
-## Select the dates
-
-Check-in is inclusive and check-out is exclusive. For example, this scans for a
-two-night stay on July 25 and July 26:
+For local development, copy the committed template:
 
 ```bash
-python3 yosemite_scanner_sms.py \
-  --messenger ntfy \
-  --check-in 2026-07-25 \
-  --check-out 2026-07-27 \
-  --people 2 \
-  --interval 25
+cp .env.example .env
 ```
 
-The built-in defaults are:
+Fill in the values you use, then load the file explicitly:
 
-- Check-in: `2026-07-25`
-- Check-out: omitted, so every available individual night from July 25 through
-  July 31 is considered
-- Interval: 25 seconds per campground
+```bash
+camp-scanner --env-file .env --messenger ntfy
+```
 
-The minimum permitted interval is 10 seconds. The four campground checks are
-staggered so they do not all contact Recreation.gov simultaneously.
+The local `.env` file is excluded by `.gitignore`.
 
-When supplied, check-out is exclusive, just like a hotel reservation. A check-in of
-July 25 and check-out of July 26 requests one occupied night: July 25, while July
-25–27 requires the same site or enough Camp 4 person-spots on both nights.
+To keep settings outside the repository, set a permanent path:
 
-When `--check-out` is omitted, the scanner uses flexible-date mode. It alerts
-separately for every available individual night from check-in through the end of
-that calendar month. This is the scanner's practical meaning of an "open" checkout;
-Recreation.gov itself still requires a departure date when you make the reservation.
+```bash
+export CAMP_SCANNER_ENV_FILE="$HOME/.config/camp-scanner/env"
+camp-scanner --messenger ntfy
+```
 
-Camp 4 uses per-person inventory. Set `--people` to the number of people in your
-party; an alert is sent only when every occupied night has at least that many
-person-spots available. Other campgrounds continue to use site-level availability.
+Explicitly exported environment variables take precedence over values loaded from
+an environment file.
+
+During development, the optional shell helper exports the project `.env` into the
+current shell:
+
+```bash
+source ./load-env.sh
+camp-scanner --messenger ntfy
+```
 
 ## ntfy configuration
-
-The ntfy messenger supports these environment variables:
 
 | Variable | Required | Description |
 | --- | --- | --- |
 | `NTFY_TOPIC` | Yes | Topic subscribed to by your ntfy clients |
 | `NTFY_SERVER` | No | Server URL; defaults to `https://ntfy.sh` |
-| `NTFY_TOKEN` | No | Bearer token for an authenticated topic/server |
+| `NTFY_TOKEN` | No | Bearer token for an authenticated topic or server |
 
-Example with authentication:
+Public ntfy topics are not inherently private. Use a difficult-to-guess topic or
+protect it with ntfy authentication.
 
-```bash
-export NTFY_SERVER="https://ntfy.sh"
-export NTFY_TOPIC="your-private-topic-name"
-export NTFY_TOKEN="tk_your_access_token"
-python3 yosemite_scanner_sms.py --messenger ntfy
-```
+## Twilio configuration
 
-For the public server, notifications are visible at:
-
-```text
-https://ntfy.sh/your-private-topic-name
-```
-
-Public ntfy topics are not inherently private. Use a difficult-to-guess topic
-name, or protect the topic with ntfy authentication.
-
-## Twilio SMS configuration
-
-Export all four Twilio variables:
+Twilio requires all four variables:
 
 ```bash
 export TWILIO_ACCOUNT_SID="your_account_sid"
@@ -136,165 +138,152 @@ export ALERT_TO_NUMBER="+15557654321"
 Both phone numbers must use E.164 format, including the leading `+` and country
 code.
 
-Test Twilio:
+Test the configuration:
 
 ```bash
-python3 yosemite_scanner_sms.py --messenger twilio --test-message
+camp-scanner --messenger twilio --test-message
 ```
 
-Start scanning:
+The older `--sms` and `--test-sms` options remain available as Twilio aliases.
+
+## Select dates
+
+Check-in is inclusive and check-out is exclusive. This example scans for a
+two-night stay on July 25 and July 26:
 
 ```bash
-python3 yosemite_scanner_sms.py --messenger twilio
+camp-scanner \
+  --messenger ntfy \
+  --check-in 2026-07-25 \
+  --check-out 2026-07-27
 ```
 
-The older `--sms` and `--test-sms` flags remain available as Twilio aliases.
+The current defaults are:
+
+- Check-in: `2026-07-25`
+- Check-out: omitted
+- Interval: 40 seconds per campground
+
+When `--check-out` is omitted, the scanner alerts separately for every available
+individual night from check-in through the end of that calendar month.
+
+The minimum permitted interval is 10 seconds. The four campground checks are
+staggered to avoid simultaneous requests.
+
+*Camp 4* reports per-person inventory. The scanner alerts on any availability
+reported by Recreation.gov.
 
 ## Local-only scanning
 
-To print openings in the terminal without ntfy or Twilio, omit `--messenger`:
+Omit `--messenger` to use terminal and macOS notifications without sending a
+remote message:
 
 ```bash
-python3 yosemite_scanner_sms.py \
+camp-scanner \
   --check-in 2026-07-25 \
   --check-out 2026-07-26
 ```
 
-On macOS, local Notification Center alerts are enabled unless you add:
+Disable macOS Notification Center alerts with:
 
 ```bash
---no-mac-notifications
+camp-scanner --no-mac-notifications
 ```
 
-There is also a local-only entry point with no remote-messenger support:
+## Alert behavior
 
-```bash
-python3 yosemite_scanner.py
-```
+- Every match from the first successful scan is treated as newly available.
+- Later alerts are sent only when a site appears after being absent from the
+  previous successful scan.
+- Matching scan results and openings appear yellow in the terminal.
+- Each alert includes the campground, site number, number of nights, date, and
+  direct Recreation.gov campsite URL.
+- The scanner backs off automatically after rate limits and other request errors.
 
-## Loading saved environment variables
-
-The Python script reads variables from its environment; it does not automatically
-load an `.env` file. If you maintain a shell settings file, load it before running
-the scanner:
-
-```bash
-source settings.sh
-python3 yosemite_scanner_sms.py --messenger ntfy
-```
-
-Do not commit files containing Twilio credentials, ntfy tokens, phone numbers, or
-private topic names.
-
-## How alerts behave
-
-- On the first successful scan, every matching site is treated as newly available.
-- Later alerts are sent only when a site appears that was absent from the previous
-  successful scan.
-- Each message includes the campground, campsite, requested dates, and a direct
-  Recreation.gov campsite link.
-- After HTTP rate limiting or other errors, the scanner backs off automatically and
-  keeps running.
-
-## Logs and debugging
-
-By default, logs are stored relative to the application directory:
+Example:
 
 ```text
-logs/yosemite_scanner.log
+Upper Pines 42 is open for 1 night on Jul 25, 2026
+https://www.recreation.gov/camping/campsites/123456
 ```
 
-The active log contains timestamps, severity levels, monitor thread names, scan
-results, delivered alerts, errors, retry delays, and exception stack traces. It is
-rotated every midnight, with seven daily backup files retained automatically.
+## Logs
 
-Console log entries use this shape:
+Logs rotate at midnight and retain seven daily backups. The default location is:
 
-```text
-2026-07-22 16:05:12 -0700 INFO     [monitor-232447] Upper Pines: Recreation.gov scan successful; 0 matching site(s)
-```
+- macOS: `~/Library/Logs/camp-scanner/camp-scanner.log`
+- Linux: `~/.local/state/camp-scanner/camp-scanner.log`
+- Windows: `%LOCALAPPDATA%\camp-scanner\camp-scanner.log`
 
-Console colors make status easy to scan:
-
-- Green: successful scans and delivered alerts
-- Yellow: warnings
-- Red: request failures, throttling, configuration errors, and other exceptions
-- Bold red: critical failures
-
-File logs deliberately contain no color escape codes, so they remain easy to
-search and process. Use `--no-color` if the terminal does not support ANSI colors.
-
-Watch the active log while the scanner runs:
+Override the path when starting the scanner:
 
 ```bash
-tail -f logs/yosemite_scanner.log
+camp-scanner --log-file /path/to/camp-scanner.log
 ```
 
-Use a different location when starting the scanner:
+Console colors:
 
-```bash
-python3 yosemite_scanner_sms.py \
-  --messenger ntfy \
-  --log-file /path/to/yosemite-scanner.log
-```
+- Green: successful scans with no matches and delivered alerts
+- Yellow: matching scans and campsite openings
+- Red: throttling, request failures, and configuration errors
 
-The directory is created automatically if it does not exist.
+File logs do not contain ANSI color codes. Use `--no-color` if the terminal does
+not support colors.
 
 ## Command reference
 
-View every supported option with:
-
 ```bash
-python3 yosemite_scanner_sms.py --help
+camp-scanner --help
 ```
-
-Common options:
 
 | Option | Purpose |
 | --- | --- |
-| `--messenger ntfy` | Send remote alerts with ntfy |
-| `--messenger twilio` | Send remote alerts with Twilio SMS |
+| `--messenger ntfy` | Send remote alerts through ntfy |
+| `--messenger twilio` | Send remote alerts through Twilio SMS |
 | `--test-message` | Send one test alert and exit |
 | `--check-in YYYY-MM-DD` | First occupied date |
-| `--check-out YYYY-MM-DD` | Exact-stay departure; omit for any night through month-end |
-| `--interval SECONDS` | Check frequency per campground; minimum 10 |
-| `--people NUMBER` | Required Camp 4 person-spots; default 1 |
+| `--check-out YYYY-MM-DD` | Departure date; omit for flexible-date mode |
+| `--interval SECONDS` | Polling interval per campground; minimum 10 |
+| `--env-file PATH` | Load local environment settings from a file |
 | `--no-mac-notifications` | Disable local macOS notifications |
 | `--ca-bundle PATH` | Use a specific TLS CA certificate bundle |
-| `--log-file PATH` | Override the default rotating log location |
-| `--no-color` | Disable ANSI colors in console logs |
+| `--log-file PATH` | Override the rotating log location |
+| `--no-color` | Disable terminal colors |
 
 ## Troubleshooting
 
-**No ntfy notification appears**
+### No ntfy notification appears
 
-- Confirm the app/browser subscription exactly matches `NTFY_TOPIC`.
+- Confirm the subscription exactly matches `NTFY_TOPIC`.
 - Run with `--test-message` before starting the scanner.
-- If using a protected topic, confirm `NTFY_TOKEN` is valid.
-- If self-hosting ntfy, confirm `NTFY_SERVER` includes `http://` or `https://`.
+- Confirm `NTFY_TOKEN` is valid when using an authenticated topic.
+- Confirm `NTFY_SERVER` includes `http://` or `https://`.
 
-**The scanner reports zero matching sites**
+### The scanner reports zero matches
 
-This means no single campsite is currently available for every occupied night in
-the requested range. It does not necessarily indicate an error.
+No campsite currently satisfies the selected dates. A successful green scan means
+the response was received and processed correctly.
 
-**Recreation.gov rejects or throttles a request**
+### Recreation.gov throttles requests
 
-HTTP 429 responses are logged in red with the server's `Retry-After` delay, and
-the affected campground monitor backs off automatically. Other HTTP failures,
-timeouts, DNS/TLS failures, malformed JSON, and unexpected response structures are
-also logged in red with exponential retry delays. Successful campground scans turn
-green, confirming that a valid response was received and processed.
+HTTP 429 responses and retry delays are logged. The affected monitor backs off
+automatically instead of repeatedly sending requests.
 
-**macOS notifications do not appear**
+### macOS notifications do not appear
 
-Allow notifications for the terminal application in macOS System Settings. Remote
-ntfy or Twilio alerts work independently of macOS Notification Center.
+Allow notifications for the terminal application in macOS System Settings.
+Remote ntfy and Twilio alerts work independently of Notification Center.
 
-**TLS certificate errors occur**
+### TLS certificate errors occur
 
-Install `certifi`, set `SSL_CERT_FILE`, or pass an explicit bundle:
+Install the optional TLS dependency:
 
 ```bash
-python3 yosemite_scanner_sms.py --ca-bundle /path/to/cacert.pem
+pipx inject camp-scanner certifi
+```
+
+You can instead set `SSL_CERT_FILE` or pass a bundle explicitly:
+
+```bash
+camp-scanner --ca-bundle /path/to/cacert.pem
 ```
