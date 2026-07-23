@@ -2,5 +2,4 @@ logs/
 __pycache__/
 *.env
 ./venv
-*.logs
-.idea/
+*.log
